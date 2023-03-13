@@ -24,8 +24,7 @@ public:
     }
 
     // Конструктор перемещения
-    explicit ArrayPtr(ArrayPtr&& other) noexcept {
-        raw_ptr_ = std::move(other.Get());
+    explicit ArrayPtr(ArrayPtr&& other) noexcept : raw_ptr_(std::move(other.Get())) {
     }
 
     // Запрещаем копирование

@@ -36,6 +36,7 @@ public:
     // Создаёт вектор из size элементов, инициализированных значением по умолчанию
     explicit SimpleVector(size_t size) {
         Reserve(size);
+        // Со списком инициализации не проходит тесты на курсе, непонятно в чем проблема
         size_ = size;
         capacity_ = size;
     }
@@ -43,15 +44,15 @@ public:
     // Создаёт вектор из size элементов, инициализированных значением value
     SimpleVector(size_t size, const Type& value) {
         Reserve(size);
+        // Со списком инициализации не проходит тесты на курсе, непонятно в чем проблема
         size_ = size;
         capacity_ = size;
         std::generate(data_.Get(), data_.Get() + size, [&value]() { return value; });
     }
 
     // Создаёт вектор из std::initializer_list
-    SimpleVector(std::initializer_list<Type> init) : data_(init.size()) {
-        size_ = init.size();
-        capacity_ = size_;
+    SimpleVector(std::initializer_list<Type> init) 
+        : data_(init.size()), size_(init.size()), capacity_(init.size()) {
         std::move(init.begin(), init.end(), Iterator(data_.Get()));
     }
 
@@ -135,7 +136,7 @@ public:
 
     // Копирование
     Iterator Insert(ConstIterator pos, const Type& value) {
-        assert(std::distance(cbegin(), pos) <= std::distance(cbegin(), cend()));
+        assert(pos >= cbegin() && pos <= cend());
         
         // Совершаем меньше действий при вставке в конец
         if (pos == cend()) {
@@ -144,7 +145,8 @@ public:
         }
 
         if (size_ < capacity_) {
-            return SeсureInsert(pos, value);
+            size_t insert_pos = std::distance(cbegin(), pos);
+            return SeсureInsert(insert_pos, value);
         }
         else {
             // Так как при недостатке капасити мы увеличиваем его, 
@@ -153,13 +155,13 @@ public:
             size_t valid_pos = std::distance(cbegin(), pos);
             Resize(size_ + 1);
             // Вызываем функцию с валидным указателем
-            return SeсureInsert((data_.Get() + valid_pos), value);
+            return SeсureInsert(valid_pos, value);
         }
     }
 
     // Перемещение
     Iterator Insert(ConstIterator pos, Type&& value) {
-        assert(std::distance(cbegin(), pos) <= std::distance(cbegin(), cend()));
+        assert(pos >= cbegin() && pos <= cend());
 
         // Совершаем меньше действий при вставке в конец
         if (pos == cend()) {
@@ -168,7 +170,8 @@ public:
         }
 
         if (size_ < capacity_) {
-            return SeсureInsert(pos, std::move(value));
+            size_t insert_pos = std::distance(cbegin(), pos);
+            return SeсureInsert(insert_pos, std::move(value));
         }
         else {
             // Так как при недостатке капасити мы увеличиваем его путем копирования в новую память
@@ -176,54 +179,19 @@ public:
             size_t valid_pos = std::distance(cbegin(), pos);
             Reserve(size_ + 1);
             // Вызываем функцию с валидным указателем
-            return SeсureInsert(Iterator(data_.Get() + valid_pos), std::move(value));
+            return SeсureInsert(valid_pos, std::move(value));
         }
-    }
-
-    // Обеспечиваем вставку с гарантией безопасности искючений
-    // Копирование
-    Iterator SeсureInsert(ConstIterator pos, const Type& value) { 
-        assert(std::distance(cbegin(), pos) <= std::distance(cbegin(), cend()));
-
-        ArrayPtr<Type> copy(capacity_);
-        try {
-            size_t insert_pos = std::distance(cbegin(), pos);
-
-            std::copy_backward(Iterator(data_.Get() + insert_pos), end(), std::next(end()));
-            data_[insert_pos] = value;
-
-            data_.swap(copy);
-            ++size_;
-            // Возвращаем указатель на вставленный элемент
-            return Iterator(data_.Get() + insert_pos);
-        }
-        catch (...) {
-            copy.~ArrayPtr();
-            throw;
-        }
-    }
-
-    // Перемещение
-    Iterator SeсureInsert(ConstIterator pos, Type&& value) {
-        assert(std::distance(cbegin(), pos) <= std::distance(cbegin(), cend()));
-
-        size_t insert_pos = std::distance(cbegin(), pos);            
-        std::move_backward(Iterator(data_.Get() + insert_pos), end(), std::next(end()));
-        data_[insert_pos] = std::move(value);
-
-        ++size_;
-        return Iterator(data_.Get() + insert_pos);       
     }
 
     // "Удаляет" последний элемент вектора. Вектор не должен быть пустым
     void PopBack() noexcept {
-        assert(size_);
+        assert(!IsEmpty());
         --size_;
     }
 
     // Удаляет элемент вектора в указанной позиции
     Iterator Erase(ConstIterator pos) {
-        assert(std::distance(cbegin(), pos) < std::distance(cbegin(), cend()));
+        assert(pos >= cbegin() && pos <= cend());
 
         ArrayPtr<Type> copy(size_);
         try {
@@ -263,11 +231,12 @@ public:
 
     // Обменивает значение с другим вектором
     void swap(SimpleVector& other) noexcept {
-        if (this != &other) {
-            data_.swap(other.data_);           
-            std::swap(size_, other.size_);
-            std::swap(capacity_, other.capacity_);
+        if (this == &other) {
+           return;
         }
+        data_.swap(other.data_);           
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
     }
 
     // Изменяет размер массива.
@@ -323,16 +292,18 @@ public:
 
     // Сообщает, пустой ли массив
     bool IsEmpty() const noexcept {
-        return !size_;
+        return size_ == 0;
     }
 
     // Возвращает ссылку на элемент с индексом index
     Type& operator[](size_t index) noexcept {
+        assert(index <= GetSize());
         return data_[index];
     }
 
     // Возвращает константную ссылку на элемент с индексом index
     const Type& operator[](size_t index) const noexcept {
+        assert(index <= GetSize());
         return data_[index];
     }
 
@@ -350,7 +321,7 @@ public:
     // Возвращает итератор на элемент, следующий за последним
     // Для пустого массива может быть равен (или не равен) nullptr
     Iterator end() noexcept {
-        return &data_[size_];
+        return Iterator(&data_[size_]);
     }
 
     // Возвращает константный итератор на начало массива
@@ -362,7 +333,7 @@ public:
     // Возвращает итератор на элемент, следующий за последним
     // Для пустого массива может быть равен (или не равен) nullptr
     ConstIterator end() const noexcept {
-        return &data_[size_];
+        return Iterator(&data_[size_]);
     }
 
     // Возвращает константный итератор на начало массива
@@ -374,12 +345,41 @@ public:
     // Возвращает итератор на элемент, следующий за последним
     // Для пустого массива может быть равен (или не равен) nullptr
     ConstIterator cend() const noexcept {
-        return &data_[size_];
+        return Iterator(&data_[size_]);
     }
 private:
     ArrayPtr<Type> data_;
     size_t size_ = 0;
     size_t capacity_ = 0;
+
+    // Обеспечиваем вставку с гарантией безопасности искючений
+    // Копирование
+    Iterator SeсureInsert(size_t insert_pos, const Type& value) { 
+
+        ArrayPtr<Type> copy(capacity_);
+        try {
+            std::copy_backward(Iterator(data_.Get() + insert_pos), end(), std::next(end()));
+            data_[insert_pos] = value;
+
+            data_.swap(copy);
+            ++size_;
+            // Возвращаем указатель на вставленный элемент
+            return Iterator(data_.Get() + insert_pos);
+        }
+        catch (...) {
+            copy.~ArrayPtr();
+            throw;
+        }
+    }
+
+    // Перемещение
+    Iterator SeсureInsert(size_t insert_pos, Type&& value) {    
+        std::move_backward(Iterator(data_.Get() + insert_pos), end(), std::next(end()));
+        data_[insert_pos] = std::move(value);
+
+        ++size_;
+        return Iterator(data_.Get() + insert_pos);       
+    }
 };
 
 ReserveProxyObj Reserve(size_t capacity_to_reserve) {
@@ -388,7 +388,8 @@ ReserveProxyObj Reserve(size_t capacity_to_reserve) {
 
 template <typename Type>
 inline bool operator==(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return !(lhs < rhs) && !(rhs < lhs);
+    return (&lhs == &rhs) || ((lhs.GetSize() ==  rhs.GetSize())
+                            && std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end()));
 }
 
 template <typename Type>
